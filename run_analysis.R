@@ -10,10 +10,11 @@ run_analysis <- function ()
 	#
 	# Step 1
 	#
+  # Merge the training and the test sets to create one data set.
+  #
 	########
   
-  # Merge the training and the test sets to create one data set.
-	cat ("Step 1\n")
+  cat ("Step 1\n")
   
   # There are 2 directories: train and test
   # In each directory there are 3 files of interest.
@@ -40,10 +41,11 @@ run_analysis <- function ()
 	########
 	#
 	# Step 2
-	#
+	#  
+	# Extract only the measurements on the mean and standard deviation for each measurement.   
+  #
 	########
   
-	# Extract only the measurements on the mean and standard deviation for each measurement.   
 	cat ("Step 2\n")
   
   # read in the feature names - they are in the second column
@@ -58,8 +60,8 @@ run_analysis <- function ()
   
   # grab all the columns with std or mean in the name
   
+	cat ("new_data with only mean|std:")
 	new_data = new_data[,grep ("mean|std", names (new_data))]
-  cat ("new_data with only mean|std:")
   str (new_data)
   
   # new_data has a few too many columns
@@ -70,9 +72,9 @@ run_analysis <- function ()
   # and so the "meanFreq" columns need to go
   #
   # note use of -grep to exclude columns
-  
-	new_data = new_data [,-grep ("meanFreq", names (new_data))]
+
 	cat ("new_data without meanFreq:")
+	new_data = new_data [,-grep ("meanFreq", names (new_data))]
 	str (new_data)
   
 	saveRDS (new_data, file="step2.rds")
@@ -81,9 +83,10 @@ run_analysis <- function ()
   #
 	# Step 3
   #
-  ########
-	
-  # Uses descriptive activity names to name the activities in the data set
+  # Use descriptive activity names to name the activities in the data set
+  #
+	########
+  
 	cat ("Step 3\n")
   
   # grab the activity info
@@ -108,14 +111,14 @@ run_analysis <- function ()
   
   # give the new column a name
   
+	cat ("new_data with new column name:")
   names (new_data)[1] = "activity"
-  cat ("new_data with new column name:")
   str (new_data)
   
   # read in the activity strings
-  
+
+	cat ("activities:")
 	activities = read.table ("UCI HAR Dataset/activity_labels.txt", stringsAsFactors = FALSE)
-  cat ("activities:")
   str (activities)
   
   # replace the activity numbers with strings
@@ -128,9 +131,10 @@ run_analysis <- function ()
 	#
 	# Step 4
 	#
+	# Appropriately labels the data set with descriptive variable names. 
+  #
 	########
   
-  # Appropriately labels the data set with descriptive variable names. 
 	cat ("Step 4\n")
   
   # I feel this has already been done by using features.txt in step 1
@@ -157,8 +161,8 @@ run_analysis <- function ()
   
 	# give the new column a name
 	
-	names (new_data)[1] = "subject"
 	cat ("new_data with new column name:")
+	names (new_data)[1] = "subject"
 	str (new_data)
   
 	saveRDS (new_data, file="step4.rds")
@@ -167,29 +171,49 @@ run_analysis <- function ()
 	#
 	# Step 5
 	#
+	# From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+  #
 	########
   
-	# From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
-	cat ("Step 5\n")
+  cat ("Step 5\n")
   
-  library (ddplyr)
+  library (dplyr)
+	step5_data = group_by (new_data, activity, subject) %>% summarise_each(funs(mean))
   
-	#new_data = ddply(new_data, .(activity, subject), colwise(mean))
-	group_by (new_data, activity, subject) %>% summarise_each(funs(mean)) %>% step5_data
+  # at this point we have a very wide data set
+  # which is close to tidy, but one more step will do it
+  # we melt the data frame to collapse the 66 measurement columns into a single "measurement type" column
   
-	saveRDS (step5_data, file="step5.rds")
+  library (reshape2)
+	step5_melt = melt (step5_data, id=c("activity", "subject"), variable.name = "measurement_type", value.name = "mean_value")
   
   # the new data set is independent in that it has been saved in a separate "step" RDS file
-  # ste4.RDS and step5.RDS can be read independently
+  # step4.RDS and step5.RDS can be read independently
   #
   # (of course this is true for EVERY step in this R file)
   # all intermediate results are saved
   
   # we are done
   
-  write.table (step5_data, "step5.txt", row.labels=FALSE)
+	saveRDS (step5_melt, file="step5.rds")
+  write.table (step5_melt, file="step5.txt", row.names=FALSE)
+  
+  # but just for fun,
+  # let's create a fun visualization using ggplot
+  #
+  # I claim that if this can be done easily,
+  # while providing a meaningful graph,
+  # it suggests that that data is indeed tidy
+  
+  library (ggplot2)
+  
+	g = ggplot (step5_melt, aes (x=subject, y=mean_value)) +
+    geom_point (alpha = 0.3) + 
+    facet_grid (activity ~ measurement_type) +
+    theme (strip.text.x = element_text (angle=90))
+	ggsave ("step5.png", width = 18, height=14)
   
   cat ("done\n")
   
-  return (new_data)
+  return (step5_melt)
 }
